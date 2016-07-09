@@ -188,6 +188,17 @@ static void setup_end_tag(bd_t *bd)
 
 __weak void setup_board_tags(struct tag **in_params) {}
 
+# ifdef CONFIG_BOOT_ATF
+# ifdef CONFIG_ARM64
+static void do_nonsec_virt_switch(void)
+{
+	/* disable caches and MMU before entering ARM TF */
+	dcache_disable();
+	invalidate_icache_all();
+	icache_disable();
+}
+# endif
+# else
 #ifdef CONFIG_ARM64
 static void do_nonsec_virt_switch(void)
 {
@@ -199,6 +210,7 @@ static void do_nonsec_virt_switch(void)
 #endif
 }
 #endif
+# endif
 
 /* Subcommand: PREP */
 static void boot_prep_linux(bootm_headers_t *images)
@@ -279,13 +291,69 @@ static void boot_jump_linux(bootm_headers_t *images, int flag)
 	kernel_entry = (void (*)(void *fdt_addr, void *res0, void *res1,
 				void *res2))images->ep;
 
-	debug("## Transferring control to Linux (at address %lx)...\n",
-		(ulong) kernel_entry);
+# ifndef CONFIG_BOOT_ATF
+	debug("## Transferring control to Linux (at address %lx) (dtb at %lx)...\n",
+	      (ulong) kernel_entry,
+	      (ulong) images->ft_addr);
+# endif
 	bootstage_mark(BOOTSTAGE_ID_RUN_OS);
 
 	announce_and_cleanup(fake);
 
 	if (!fake) {
+# ifdef CONFIG_BOOT_ATF
+	  uint32_t saved_kernel_entry;
+	  char *ap;
+	  uint32_t atf_addr = ATF_ENTRY_ADDR;
+	  uint32_t get_spin_addr = (ATF_ENTRY_ADDR + 4);
+	  uint32_t set_entry_addr = (ATF_ENTRY_ADDR + 8);
+	  uint32_t tee_addr = OPTEE_LOAD_ADDR;
+	  void (*bl31_uboot_set_entries)(unsigned int kernel, unsigned int dtb,
+					 unsigned int el, unsigned int optee_load);
+	  unsigned long long (*bl31_getspin)(void);
+	  unsigned long long spin_addr;
+
+	  ap = getenv("atf_load_addr");
+	  if (ap) {
+	    char *ptr;
+	    atf_addr = ustrtoul(ap, &ptr, 16);
+	    get_spin_addr = atf_addr + 4;
+	    set_entry_addr = atf_addr + 8;
+	  }
+
+	  ap = getenv("tee_load_addr");
+	  if (ap) {
+	    char *ptr;
+	    tee_addr = ustrtoul(ap, &ptr, 16);
+	  }
+
+	  memcpy(&saved_kernel_entry, &kernel_entry, 4);
+	  memcpy(&kernel_entry, &atf_addr, 4);
+	  memcpy(&bl31_getspin, &get_spin_addr, 4);
+	  memcpy(&bl31_uboot_set_entries, &set_entry_addr, 4);
+
+	  spin_addr = (*bl31_getspin)(); /* get spin address */
+	  debug("spin_addr: 0x%llx\n", spin_addr);
+	  (*bl31_uboot_set_entries)(saved_kernel_entry, images->ft_addr, 1, tee_addr);
+
+	  ap = getenv("smp");
+	  if (ap && (strcmp(ap, "on") == 0)) {
+	    /*
+	      Release spinning cores
+	    */
+	    unsigned long long *core_1 = (unsigned long long *)(0xe0);
+	    unsigned long long *core_2 = (unsigned long long *)(0xe8);
+	    unsigned long long *core_3 = (unsigned long long *)(0xf0);
+
+	    *core_1 = spin_addr;
+	    *core_2 = spin_addr;
+	    *core_3 = spin_addr;
+	  }
+
+	  printf("## Transferring control to ARM TF (at address %lx) (dtb at %lx)...\n",
+		 (ulong) kernel_entry,
+		 (ulong) images->ft_addr);
+# endif
 		do_nonsec_virt_switch();
 		kernel_entry(images->ft_addr, NULL, NULL, NULL);
 	}

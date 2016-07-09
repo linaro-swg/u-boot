@@ -10,6 +10,10 @@
 #include <linux/sizes.h>
 #include <asm/arch/timer.h>
 
+# if 0
+# define DEBUG
+# endif
+
 #if defined(CONFIG_TARGET_RPI_2) || defined(CONFIG_TARGET_RPI_3_32B)
 #define CONFIG_SKIP_LOWLEVEL_INIT
 #endif
@@ -20,8 +24,16 @@
 #define CONFIG_SYS_CACHELINE_SIZE		64
 #endif
 
+# define CONFIG_JTAG_ENABLE
+# define CONFIG_CMD_BOOTZ	/* boot zImage			*/
+
 /* Architecture, CPU, etc.*/
 #define CONFIG_ARCH_CPU_INIT
+
+#define CONFIG_BOOT_ATF
+
+# define ATF_ENTRY_ADDR  (0x08400000)
+# define OPTEE_LOAD_ADDR (ATF_ENTRY_ADDR + 0x20000)
 
 /* Use SoC timer for AArch32, but architected timer for AArch64 */
 #ifndef CONFIG_ARM64

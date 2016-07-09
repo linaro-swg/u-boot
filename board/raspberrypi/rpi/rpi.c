@@ -253,6 +253,21 @@ static struct mm_region bcm2837_mem_map[] = {
 struct mm_region *mem_map = bcm2837_mem_map;
 #endif
 
+static uint32_t boot_r0 __attribute__ ((section(".data")));
+static uint32_t boot_r1 __attribute__ ((section(".data")));
+static uint32_t boot_r2 __attribute__ ((section(".data")));
+static uint32_t boot_r3 __attribute__ ((section(".data")));
+
+void save_boot_params_ret(void);
+void save_boot_params(u32 r0, u32 r1, u32 r2, u32 r3)
+{
+	boot_r0 = r0;
+	boot_r1 = r1;
+	boot_r2 = r2;
+	boot_r3 = r3;
+	save_boot_params_ret();
+}
+
 int dram_init(void)
 {
 	ALLOC_CACHE_ALIGN_BUFFER(struct msg_get_arm_mem, msg, 1);
@@ -270,6 +285,13 @@ int dram_init(void)
 	gd->ram_size = msg->get_arm_mem.body.resp.mem_size;
 
 	return 0;
+}
+
+ulong board_get_usable_ram_top(ulong total_size)
+{
+	if ((gd->ram_top - boot_r2) > SZ_64M)
+		return gd->ram_top;
+	return boot_r2 & 0xffff0000;
 }
 
 static void set_fdtfile(void)
@@ -354,12 +376,41 @@ static void set_serial_number(void)
 
 int misc_init_r(void)
 {
+# ifdef CONFIG_JTAG_ENABLE
+# define GPFSEL0     0x3F200000
+# define GPFSEL1     (GPFSEL0+4)
+# define GPFSEL2     (GPFSEL0+8)
+# endif
+
+# ifdef CONFIG_JTAG_ENABLE
+	uint32_t val;
+	uint32_t *reg;
+# endif
+
+
 	set_fdtfile();
 	set_usbethaddr();
 #ifdef CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
 	set_board_info();
 #endif
 	set_serial_number();
+
+# ifdef CONFIG_JTAG_ENABLE
+	/* gpio4, alt5 ARM_TDI */
+	reg = (uint32_t *)(GPFSEL0);
+	val = *reg;
+	val = val & ~(7 << 12);
+	val = val | (2 << 12);
+	*reg = val;
+
+	reg = (uint32_t *)(GPFSEL2);
+	val = *reg;
+	val = val & ~((7 << 6) | (7 << 12) | (7 << 15) | (7 << 21));
+	/*           TRST      RTCK       TDO         TCK         TMS */
+	val = val | (3 << 6) | (3 << 9) | (3 << 12) | (3 << 15) | (3 << 21);
+	*reg = val;
+	printf("JTAG (gpio) enabled\n");
+# endif
 
 	return 0;
 }
@@ -439,6 +490,7 @@ static void get_board_rev(void)
 	}
 
 	printf("RPI %s (0x%x)\n", model->name, revision);
+	printf("boot regs: 0x%08x 0x%08x 0x%08x 0x%08x\n", boot_r0, boot_r1, boot_r2, boot_r3);
 }
 
 int board_init(void)

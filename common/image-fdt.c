@@ -136,7 +136,7 @@ int boot_relocate_fdt(struct lmb *lmb, char **of_flat_tree, ulong *of_size)
 	if (fdt_high) {
 		void *desired_addr = (void *)simple_strtoul(fdt_high, NULL, 16);
 
-		if (((ulong) desired_addr) == ~0UL) {
+		if (((ulong) desired_addr) == 0xffffffff) {
 			/* All ones means use fdt in place */
 			of_start = fdt_blob;
 			lmb_reserve(lmb, (ulong)of_start, of_len);
