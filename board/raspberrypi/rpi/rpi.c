@@ -376,41 +376,12 @@ static void set_serial_number(void)
 
 int misc_init_r(void)
 {
-# ifdef CONFIG_JTAG_ENABLE
-# define GPFSEL0     0x3F200000
-# define GPFSEL1     (GPFSEL0+4)
-# define GPFSEL2     (GPFSEL0+8)
-# endif
-
-# ifdef CONFIG_JTAG_ENABLE
-	uint32_t val;
-	uint32_t *reg;
-# endif
-
-
 	set_fdtfile();
 	set_usbethaddr();
 #ifdef CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
 	set_board_info();
 #endif
 	set_serial_number();
-
-# ifdef CONFIG_JTAG_ENABLE
-	/* gpio4, alt5 ARM_TDI */
-	reg = (uint32_t *)(GPFSEL0);
-	val = *reg;
-	val = val & ~(7 << 12);
-	val = val | (2 << 12);
-	*reg = val;
-
-	reg = (uint32_t *)(GPFSEL2);
-	val = *reg;
-	val = val & ~((7 << 6) | (7 << 12) | (7 << 15) | (7 << 21));
-	/*           TRST      RTCK       TDO         TCK         TMS */
-	val = val | (3 << 6) | (3 << 9) | (3 << 12) | (3 << 15) | (3 << 21);
-	*reg = val;
-	printf("JTAG (gpio) enabled\n");
-# endif
 
 	return 0;
 }

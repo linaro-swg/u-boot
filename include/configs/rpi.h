@@ -24,7 +24,6 @@
 #define CONFIG_SYS_CACHELINE_SIZE		64
 #endif
 
-# define CONFIG_JTAG_ENABLE
 # define CONFIG_CMD_BOOTZ	/* boot zImage			*/
 
 /* Architecture, CPU, etc.*/
